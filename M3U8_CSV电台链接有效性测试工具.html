@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U8播放源测试工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1a56db',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        info: '#3b82f6'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">M3U8播放源测试工具</h1>
+            <p class="text-gray-600">快速验证M3U8和CSV文件中播放源的有效性</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左侧：文件上传 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-upload mr-2 text-primary"></i>文件上传
+                    </h2>
+                    
+                    <!-- 文件上传区域 -->
+                    <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors duration-300 mb-6">
+                        <i class="fa fa-file-text-o text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-600 mb-2">拖拽文件到此处，或</p>
+                        <button id="browseBtn" class="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors duration-300">
+                            选择文件
+                        </button>
+                        <input type="file" id="fileInput" accept=".m3u8,.m3u,.txt,.csv" class="hidden">
+                        <p class="text-xs text-gray-500 mt-2">支持 .m3u8, .m3u, .txt, .csv 格式</p>
+                    </div>
+                    
+                    <!-- 文件信息 -->
+                    <div id="fileInfo" class="hidden mb-6">
+                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-md">
+                            <div class="flex items-center">
+                                <i class="fa fa-file-text-o text-primary mr-2"></i>
+                                <span id="fileName" class="text-sm font-medium truncate max-w-[200px]"></span>
+                            </div>
+                            <button id="removeFile" class="text-gray-500 hover:text-danger">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="flex flex-col space-y-3">
+                        <button id="startTest" class="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300">
+                            <i class="fa fa-play-circle mr-2"></i><span id="testButtonText">开始测试</span>
+                        </button>
+                        <button id="exportValid" class="bg-success hover:bg-green-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300">
+                            <i class="fa fa-download mr-2"></i>导出有效连接
+                        </button>
+
+                        <button id="clearResults" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-300">
+                            <i class="fa fa-refresh mr-2"></i>清空结果
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧：测试结果 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fa fa-tasks mr-2 text-primary"></i>测试结果
+                    </h2>
+                    
+                    <!-- 统计信息 -->
+                    <div id="testStats" class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="bg-gray-50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-gray-500 mb-1">总连接数</p>
+                            <p id="totalCount" class="text-2xl font-bold text-gray-800">0</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-gray-500 mb-1">有效连接</p>
+                            <p id="validCount" class="text-2xl font-bold text-success">0</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg text-center">
+                            <p class="text-sm text-gray-500 mb-1">无效连接</p>
+                            <p id="invalidCount" class="text-2xl font-bold text-danger">0</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 进度条 -->
+                    <div id="progressContainer" class="hidden mb-6">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>测试进度</span>
+                            <span id="progressText">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 状态消息 -->
+                    <div id="statusMessage" class="hidden mb-6 p-3 rounded-md text-sm"></div>
+                    
+                    <!-- 连接列表 -->
+                    <div class="border rounded-lg overflow-hidden">
+                        <div class="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                            <h3 class="font-medium text-sm">连接列表</h3>
+                            <div class="flex space-x-2">
+                                <button id="showAll" class="text-xs bg-primary text-white px-2 py-1 rounded">全部</button>
+                                <button id="showValid" class="text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded">有效</button>
+                                <button id="showInvalid" class="text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded">无效</button>
+                            </div>
+                        </div>
+                        <div id="connectionList" class="max-h-[400px] overflow-y-auto">
+                            <div class="text-center text-gray-500 py-8">
+                                <i class="fa fa-info-circle text-2xl mb-2"></i>
+                                <p>请上传文件并开始测试</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 全局变量 ====================
+        let m3u8Content = '';
+        let connections = [];
+        let testResults = [];
+        let isTesting = false;
+        let isPaused = false;
+        let currentTestIndex = 0;
+        let originalFileExt = '';
+
+        // 性能优化：虚拟滚动 & 计数器
+        const ITEM_HEIGHT = 76;
+        const VIRTUAL_BUFFER = 5;
+        let currentFilter = 'all';
+        let validCounter = 0;
+        let invalidCounter = 0;
+        let pendingRenderRAF = null;
+        let lastRenderStart = -1;
+        let lastRenderEnd = -1;
+        let lastRenderTotal = -1;
+        let lastRenderFilter = '';
+
+        // ==================== DOM元素 ====================
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const dropZone = document.getElementById('dropZone');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const removeFile = document.getElementById('removeFile');
+        const startTest = document.getElementById('startTest');
+        const exportValid = document.getElementById('exportValid');
+        const clearResults = document.getElementById('clearResults');
+        const totalCount = document.getElementById('totalCount');
+        const validCount = document.getElementById('validCount');
+        const invalidCount = document.getElementById('invalidCount');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const statusMessage = document.getElementById('statusMessage');
+        const connectionList = document.getElementById('connectionList');
+        const showAll = document.getElementById('showAll');
+        const showValid = document.getElementById('showValid');
+        const showInvalid = document.getElementById('showInvalid');
+
+        // ==================== 初始化 ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('M3U8播放源测试工具已加载');
+
+            // 虚拟滚动监听
+            connectionList.addEventListener('scroll', function() {
+                scheduleRender();
+            });
+
+            // 绑定事件
+            browseBtn.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    handleFile(this.files[0]);
+                }
+            });
+
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('border-primary');
+            });
+
+            dropZone.addEventListener('dragleave', function() {
+                this.classList.remove('border-primary');
+            });
+
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('border-primary');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            removeFile.addEventListener('click', function() {
+                resetFileState();
+            });
+
+            startTest.addEventListener('click', function() {
+                if (isTesting && !isPaused) {
+                    stopTesting();
+                } else {
+                    if (canStartTest()) {
+                        startTesting();
+                    }
+                }
+            });
+
+            exportValid.addEventListener('click', function() {
+                exportValidConnections();
+            });
+
+            clearResults.addEventListener('click', function() {
+                clearTestResults();
+            });
+
+            showAll.addEventListener('click', function() { setFilter('all'); });
+            showValid.addEventListener('click', function() { setFilter('valid'); });
+            showInvalid.addEventListener('click', function() { setFilter('invalid'); });
+
+            updateButtonStates();
+        });
+
+        // ==================== 虚拟滚动渲染 ====================
+
+        // 获取筛选后的结果
+        function getFilteredResults() {
+            const results = [];
+            for (let i = 0; i < testResults.length; i++) {
+                const r = testResults[i];
+                if (!r) continue;
+                if (currentFilter === 'all' ||
+                    (currentFilter === 'valid' && r.isValid) ||
+                    (currentFilter === 'invalid' && !r.isValid)) {
+                    results.push(r);
+                }
+            }
+            return results;
+        }
+
+        // 生成单项 HTML（用内联样式避免 Tailwind 类名解析开销）
+        function renderItemHTML(result) {
+            const isV = result.isValid;
+            const iconColor = isV ? '#10b981' : '#ef4444';
+            const iconClass = isV ? 'fa-check-circle' : 'fa-times-circle';
+            const statusBg = isV ? '#d1fae5' : '#fee2e2';
+            let statusText = result.status;
+            if (statusText === 'timeout') statusText = '超时';
+            else if (statusText === 0) statusText = '错误';
+
+            let errorHtml = '';
+            if (!isV && result.error && result.error !== '连接错误' && result.error !== '连接超时') {
+                errorHtml = '<div style="font-size:12px;color:#ef4444;margin-top:4px;margin-left:24px">' + result.error + '</div>';
+            }
+
+            return '<div style="border-bottom:1px solid #f3f4f6;padding:12px" data-index="' + result.index + '">' +
+                '<div style="display:flex;align-items:center;margin-bottom:4px">' +
+                    '<span style="margin-right:8px;color:' + iconColor + '"><i class="fa ' + iconClass + '"></i></span>' +
+                    '<p style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + result.title + '">' + result.title + '</p>' +
+                '</div>' +
+                '<p style="font-size:12px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:24px" title="' + result.url + '">' + result.url + '</p>' +
+                '<div style="display:flex;align-items:center;justify-content:flex-end;margin-top:4px">' +
+                    '<span style="font-size:12px;color:#6b7280;margin-right:8px">' + result.responseTime + 'ms</span>' +
+                    '<span style="font-size:12px;padding:2px 6px;border-radius:4px;background:' + statusBg + ';color:' + iconColor + '">' + statusText + '</span>' +
+                '</div>' +
+                errorHtml +
+            '</div>';
+        }
+
+        // 渲染虚拟列表
+        function renderVirtualList(force) {
+            var filtered = getFilteredResults();
+            var total = filtered.length;
+
+            if (total === 0) {
+                if (!force) return;
+                connectionList.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fa fa-info-circle" style="font-size:24px;margin-bottom:8px;display:block"></i><p>暂无测试结果</p></div>';
+                lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
+                return;
+            }
+
+            var scrollTop = connectionList.scrollTop;
+            var viewHeight = connectionList.clientHeight;
+
+            var start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - VIRTUAL_BUFFER);
+            var end = Math.min(total, Math.ceil((scrollTop + viewHeight) / ITEM_HEIGHT) + VIRTUAL_BUFFER);
+
+            if (!force && start === lastRenderStart && end === lastRenderEnd && total === lastRenderTotal && currentFilter === lastRenderFilter) {
+                return;
+            }
+
+            lastRenderStart = start;
+            lastRenderEnd = end;
+            lastRenderTotal = total;
+            lastRenderFilter = currentFilter;
+
+            var html = '<div style="height:' + (start * ITEM_HEIGHT) + 'px"></div>';
+            for (var i = start; i < end; i++) {
+                html += renderItemHTML(filtered[i]);
+            }
+            html += '<div style="height:' + Math.max(0, (total - end) * ITEM_HEIGHT) + 'px"></div>';
+
+            connectionList.innerHTML = html;
+        }
+
+        // 调度渲染（rAF 去抖）
+        function scheduleRender(force) {
+            if (pendingRenderRAF) cancelAnimationFrame(pendingRenderRAF);
+            pendingRenderRAF = requestAnimationFrame(function() {
+                pendingRenderRAF = null;
+                renderVirtualList(force);
+            });
+        }
+
+        // ==================== 文件处理 ====================
+
+        function handleFile(file) {
+            console.log('=== 开始处理文件 ===');
+            resetFileState();
+            showStatus('正在处理文件: ' + file.name, 'info');
+
+            if (file.size === 0) {
+                showStatus('选择的文件为空，请选择有效的文件', 'danger');
+                return;
+            }
+
+            var fileExt = file.name.toLowerCase().split('.').pop();
+            if (['m3u8', 'm3u', 'txt', 'csv'].indexOf(fileExt) === -1) {
+                showStatus('不支持的文件类型: .' + fileExt + '，请选择 .m3u8, .m3u, .txt 或 .csv 文件', 'danger');
+                return;
+            }
+
+            var maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showStatus('文件过大 (' + (file.size / 1024 / 1024).toFixed(1) + 'MB)，请选择小于10MB的文件', 'danger');
+                return;
+            }
+
+            originalFileExt = fileExt;
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    m3u8Content = e.target.result;
+                    if (!m3u8Content || m3u8Content.trim().length === 0) {
+                        throw new Error('文件内容为空');
+                    }
+
+                    fileName.textContent = file.name;
+                    fileInfo.classList.remove('hidden');
+
+                    if (fileExt === 'csv') {
+                        parseCSVContent(m3u8Content);
+                    } else {
+                        parseM3U8Content(m3u8Content);
+                    }
+                } catch (error) {
+                    showStatus('文件内容处理失败: ' + error.message, 'danger');
+                    resetFileState();
+                }
+            };
+
+            reader.onerror = function(event) {
+                showStatus('文件读取失败', 'danger');
+            };
+
+            reader.onabort = function() {
+                showStatus('文件读取已中止', 'warning');
+            };
+
+            try {
+                reader.readAsText(file, 'UTF-8');
+            } catch (startError) {
+                showStatus('启动文件读取失败: ' + startError.message, 'danger');
+            }
+        }
+
+        // ==================== 解析逻辑 ====================
+
+        function parseM3U8Content(content) {
+            connections = [];
+            var lines = content.split('\n');
+            var currentTitle = '';
+            var urlIndex = 0;
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (line.indexOf('#EXTINF:') === 0) {
+                    var match = line.match(/#EXTINF:.*,(.*)/);
+                    if (match) currentTitle = match[1];
+                } else if (line && line.charAt(0) !== '#') {
+                    if (line.indexOf('http://') === 0 || line.indexOf('https://') === 0) {
+                        connections.push({ url: line, title: currentTitle || ('链接 ' + (urlIndex + 1)), index: urlIndex });
+                        urlIndex++;
+                        currentTitle = '';
+                    }
+                }
+            }
+
+            totalCount.textContent = connections.length;
+            validCount.textContent = '0';
+            invalidCount.textContent = '0';
+
+            if (connections.length === 0) {
+                showStatus('未找到有效的播放源链接', 'warning');
+            } else {
+                showStatus('成功解析 ' + connections.length + ' 个播放源链接', 'success');
+            }
+
+            updateButtonStates();
+        }
+
+        function parseCSVContent(content) {
+            connections = [];
+            var lines = content.split('\n');
+            var urlIndex = 0;
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line || line.charAt(0) === '#') continue;
+
+                try {
+                    var parsed = parseCSVLine(line);
+                    if (parsed.length >= 2) {
+                        var title = parsed[0].trim();
+                        var url = '';
+                        for (var j = 1; j < parsed.length; j++) {
+                            var field = parsed[j].trim();
+                            if (field.indexOf('http://') === 0 || field.indexOf('https://') === 0) { url = field; break; }
+                            var urlMatch = field.match(/(https?:\/\/[^\s]+)/);
+                            if (urlMatch) { url = urlMatch[1]; break; }
+                        }
+                        if (url) { connections.push({ url: url, title: title || ('链接 ' + (urlIndex + 1)), index: urlIndex }); urlIndex++; continue; }
+                    }
+
+                    var parts = line.split(',');
+                    if (parts.length >= 2) {
+                        var title2 = parts[0].trim();
+                        var url2 = '';
+                        for (var j2 = 1; j2 < parts.length; j2++) {
+                            var part = parts[j2].trim();
+                            if (!part || part === '0') continue;
+                            if (part.indexOf('http://') === 0 || part.indexOf('https://') === 0) { url2 = part; break; }
+                            var m2 = part.match(/(https?:\/\/[^\s]+)/);
+                            if (m2) { url2 = m2[1]; break; }
+                        }
+                        if (url2) { connections.push({ url: url2, title: title2 || ('链接 ' + (urlIndex + 1)), index: urlIndex }); urlIndex++; continue; }
+                    }
+
+                    var m3 = line.match(/(https?:\/\/[^\s,"]+)/);
+                    if (m3) {
+                        var tp = line.substring(0, m3.index).trim().replace(/["']/g, '').replace(/,$/, '').trim() || ('链接 ' + (urlIndex + 1));
+                        connections.push({ url: m3[1], title: tp, index: urlIndex }); urlIndex++; continue;
+                    }
+                } catch (error) {
+                    // 跳过出错行
+                }
+            }
+
+            totalCount.textContent = connections.length;
+            validCount.textContent = '0';
+            invalidCount.textContent = '0';
+
+            if (connections.length === 0) {
+                showStatus('未找到有效的播放源链接，请检查文件格式', 'warning');
+            } else {
+                showStatus('成功解析 ' + connections.length + ' 个播放源链接', 'success');
+            }
+
+            updateButtonStates();
+        }
+
+        function parseCSVLine(line) {
+            var result = [];
+            var current = '';
+            var inQuotes = false;
+            for (var i = 0; i < line.length; i++) {
+                var ch = line[i];
+                if (ch === '"') inQuotes = !inQuotes;
+                else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+                else current += ch;
+            }
+            result.push(current);
+            return result;
+        }
+
+        // ==================== 测试逻辑 ====================
+
+        async function startTesting() {
+            if (isPaused) {
+                isPaused = false;
+                startTest.innerHTML = '<i class="fa fa-stop mr-2"></i><span id="testButtonText">停止测试</span>';
+                startTest.classList.remove('bg-warning', 'bg-primary');
+                startTest.classList.add('bg-danger');
+            } else {
+                isTesting = true;
+                isPaused = false;
+                currentTestIndex = 0;
+                testResults = [];
+                validCounter = 0;
+                invalidCounter = 0;
+                lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
+
+                progressContainer.classList.remove('hidden');
+                progressBar.style.width = '0%';
+                progressText.textContent = '0%';
+
+                connectionList.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fa fa-spinner fa-spin" style="font-size:24px;margin-bottom:8px;display:block"></i><p>准备测试...</p></div>';
+            }
+
+            updateButtonStates();
+
+            var totalCountVal = connections.length;
+
+            for (var i = currentTestIndex; i < totalCountVal; i++) {
+                if (isPaused) {
+                    currentTestIndex = i;
+                    showStatus('测试已暂停，当前进度: ' + i + '/' + totalCountVal, 'warning');
+                    scheduleRender(true);
+                    return;
+                }
+
+                var conn = connections[i];
+                showStatus('测试中: ' + conn.title + ' (' + (i + 1) + '/' + totalCountVal + ')', 'info');
+
+                try {
+                    var result = await testConnection(conn.url);
+                    testResults[i] = {
+                        url: conn.url, title: conn.title, index: conn.index,
+                        isValid: result.isValid, status: result.status,
+                        responseTime: result.responseTime, error: result.error
+                    };
+                } catch (error) {
+                    testResults[i] = {
+                        url: conn.url, title: conn.title, index: conn.index,
+                        isValid: false, status: 0, responseTime: 0, error: '测试出错: ' + error.message
+                    };
+                }
+
+                if (testResults[i].isValid) validCounter++;
+                else invalidCounter++;
+
+                validCount.textContent = validCounter;
+                invalidCount.textContent = invalidCounter;
+
+                var progress = Math.round(((i + 1) / totalCountVal) * 100);
+                progressBar.style.width = progress + '%';
+                progressText.textContent = progress + '%';
+
+                // 触发虚拟渲染
+                scheduleRender(true);
+
+                // 如果用户在底部，自动滚动到最新结果
+                requestAnimationFrame(function() {
+                    if (connectionList.scrollTop + connectionList.clientHeight >= connectionList.scrollHeight - ITEM_HEIGHT * 3) {
+                        connectionList.scrollTop = connectionList.scrollHeight;
+                    }
+                });
+
+                await new Promise(function(resolve) { setTimeout(resolve, 500); });
+            }
+
+            isTesting = false;
+            isPaused = false;
+            currentTestIndex = 0;
+            progressContainer.classList.add('hidden');
+            updateButtonStates();
+            scheduleRender(true);
+
+            showStatus('测试完成！有效连接: ' + validCounter + ', 无效连接: ' + invalidCounter, 'success');
+        }
+
+        function stopTesting() {
+            if (isTesting && !isPaused) {
+                isPaused = true;
+                startTest.innerHTML = '<i class="fa fa-play mr-2"></i><span id="testButtonText">继续测试</span>';
+                startTest.classList.remove('bg-danger', 'bg-primary');
+                startTest.classList.add('bg-warning');
+                updateButtonStates();
+            }
+        }
+
+        function testConnection(url) {
+            return new Promise(function(resolve) {
+                var startTime = performance.now();
+                var resolved = false;
+                var receivedData = false;
+                var chunkCount = 0;
+
+                var xhr = new XMLHttpRequest();
+                xhr.timeout = 40000;
+                xhr.responseType = 'arraybuffer';
+
+                xhr.onprogress = function(event) {
+                    if (event.lengthComputable) {
+                        receivedData = true;
+                    } else if (event.loaded > 0) {
+                        receivedData = true;
+                        chunkCount++;
+                        if (chunkCount >= 3) {
+                            if (!resolved) {
+                                resolved = true;
+                                resolve({ isValid: true, status: xhr.status, responseTime: Math.round(performance.now() - startTime), error: null });
+                            }
+                        }
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (resolved) return;
+                    resolved = true;
+                    var isValid = (xhr.status >= 200 && xhr.status < 500) && receivedData;
+                    resolve({ isValid: isValid, status: xhr.status, responseTime: Math.round(performance.now() - startTime), error: isValid ? null : (receivedData ? ('HTTP ' + xhr.status) : '无数据传输') });
+                };
+
+                xhr.onerror = function() {
+                    if (resolved) return;
+                    resolved = true;
+                    resolve({ isValid: false, status: 0, responseTime: Math.round(performance.now() - startTime), error: '网络错误' });
+                };
+
+                xhr.ontimeout = function() {
+                    if (resolved) return;
+                    resolved = true;
+                    var isValid = receivedData;
+                    resolve({ isValid: isValid, status: 'timeout', responseTime: Math.round(performance.now() - startTime), error: isValid ? '连接超时（有数据）' : '连接超时（无数据）' });
+                };
+
+                try {
+                    xhr.open('GET', url, true);
+                    xhr.setRequestHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    xhr.setRequestHeader('Accept', '*/*');
+                    xhr.send();
+                } catch (e) {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve({ isValid: false, status: 0, responseTime: Math.round(performance.now() - startTime), error: '请求异常' });
+                    }
+                }
+            });
+        }
+
+        // ==================== UI 更新 ====================
+
+        function updateStatistics() {
+            validCount.textContent = validCounter;
+            invalidCount.textContent = invalidCounter;
+        }
+
+        function updateButtonStates() {
+            var hasConnections = connections.length > 0;
+            var hasValidResults = validCounter > 0;
+
+            if (isTesting) {
+                startTest.disabled = false;
+                if (isPaused) {
+                    startTest.innerHTML = '<i class="fa fa-play mr-2"></i><span id="testButtonText">继续测试</span>';
+                    startTest.classList.remove('bg-danger', 'bg-primary');
+                    startTest.classList.add('bg-warning');
+                } else {
+                    startTest.innerHTML = '<i class="fa fa-stop mr-2"></i><span id="testButtonText">停止测试</span>';
+                    startTest.classList.remove('bg-warning', 'bg-primary');
+                    startTest.classList.add('bg-danger');
+                }
+            } else {
+                startTest.disabled = !hasConnections;
+                startTest.innerHTML = '<i class="fa fa-play-circle mr-2"></i><span id="testButtonText">开始测试</span>';
+                startTest.classList.remove('bg-danger', 'bg-warning');
+                startTest.classList.add('bg-primary');
+            }
+
+            exportValid.disabled = !hasValidResults || (isTesting && !isPaused);
+            clearResults.disabled = isTesting && !isPaused;
+        }
+
+        function showStatus(message, type) {
+            type = type || 'info';
+            statusMessage.textContent = message;
+            statusMessage.className = 'mb-6 p-3 rounded-md text-sm ' + getColorClass(type);
+            statusMessage.classList.remove('hidden');
+            if (type === 'success') {
+                setTimeout(function() { statusMessage.classList.add('hidden'); }, 3000);
+            }
+        }
+
+        function getColorClass(type) {
+            var colors = { success: 'bg-green-100 text-green-700', danger: 'bg-red-100 text-red-700', warning: 'bg-yellow-100 text-yellow-700', info: 'bg-blue-100 text-blue-700' };
+            return colors[type] || colors.info;
+        }
+
+        // ==================== 筛选 ====================
+
+        function setFilter(filter) {
+            currentFilter = filter;
+
+            showAll.className = filter === 'all' ? 'text-xs bg-primary text-white px-2 py-1 rounded' : 'text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded';
+            showValid.className = filter === 'valid' ? 'text-xs bg-success text-white px-2 py-1 rounded' : 'text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded';
+            showInvalid.className = filter === 'invalid' ? 'text-xs bg-danger text-white px-2 py-1 rounded' : 'text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded';
+
+            connectionList.scrollTop = 0;
+            lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
+            scheduleRender(true);
+        }
+
+        // ==================== 导出 ====================
+
+        function exportValidConnections() {
+            var validConnections = [];
+            for (var i = 0; i < testResults.length; i++) {
+                if (testResults[i] && testResults[i].isValid) validConnections.push(testResults[i]);
+            }
+            if (validConnections.length === 0) {
+                showStatus('没有有效的连接可以导出', 'warning');
+                return;
+            }
+
+            var content = '';
+            var filename = 'valid-connections';
+
+            if (originalFileExt === 'csv') {
+                content = validConnections.map(function(conn) { return '"' + conn.title + '","' + conn.url + '"'; }).join('\n');
+                filename += '.csv';
+            } else {
+                content = '#EXTM3U\n';
+                validConnections.forEach(function(conn) {
+                    content += '#EXTINF:-1,' + conn.title + '\n' + conn.url + '\n';
+                });
+                filename += '.m3u8';
+            }
+
+            var blob = new Blob([content], { type: 'text/plain' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showStatus('成功导出 ' + validConnections.length + ' 个有效连接', 'success');
+        }
+
+        // ==================== 重置 ====================
+
+        function resetFileState() {
+            m3u8Content = '';
+            connections = [];
+            testResults = [];
+            isTesting = false;
+            isPaused = false;
+            currentTestIndex = 0;
+            originalFileExt = '';
+            validCounter = 0;
+            invalidCounter = 0;
+            currentFilter = 'all';
+            lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
+            fileInfo.classList.add('hidden');
+            fileName.textContent = '';
+            validCount.textContent = '0';
+            invalidCount.textContent = '0';
+            // 重置筛选按钮
+            showAll.className = 'text-xs bg-primary text-white px-2 py-1 rounded';
+            showValid.className = 'text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded';
+            showInvalid.className = 'text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded';
+            updateButtonStates();
+            clearTestResults();
+        }
+
+        function clearTestResults() {
+            testResults = [];
+            validCounter = 0;
+            invalidCounter = 0;
+            isTesting = false;
+            isPaused = false;
+            currentTestIndex = 0;
+            currentFilter = 'all';
+            lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
+            connectionList.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fa fa-info-circle" style="font-size:24px;margin-bottom:8px;display:block"></i><p>请上传文件并开始测试</p></div>';
+            validCount.textContent = '0';
+            invalidCount.textContent = '0';
+            updateButtonStates();
+            statusMessage.classList.add('hidden');
+        }
+
+        function canStartTest() {
+            if (connections.length === 0) {
+                showStatus('请先上传文件', 'warning');
+                return false;
+            }
+            return true;
+        }
+    </script>
+</body>
+</html>
