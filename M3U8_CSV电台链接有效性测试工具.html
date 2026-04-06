@@ -526,6 +526,10 @@
                 invalidCounter = 0;
                 lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
 
+                totalCount.textContent = connections.length;
+                validCount.textContent = '0';
+                invalidCount.textContent = '0';
+
                 progressContainer.classList.remove('hidden');
                 progressBar.style.width = '0%';
                 progressText.textContent = '0%';
@@ -802,8 +806,10 @@
             currentFilter = 'all';
             lastRenderStart = lastRenderEnd = lastRenderTotal = -1;
             connectionList.innerHTML = '<div class="text-center text-gray-500 py-8"><i class="fa fa-info-circle" style="font-size:24px;margin-bottom:8px;display:block"></i><p>请上传文件并开始测试</p></div>';
+            totalCount.textContent = connections.length || '0';
             validCount.textContent = '0';
             invalidCount.textContent = '0';
+            progressContainer.classList.add('hidden');
             updateButtonStates();
             statusMessage.classList.add('hidden');
         }
